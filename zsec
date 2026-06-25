@@ -521,8 +521,40 @@ if [[ "$oper" == "up" ]]; then
     echo ""
 
 elif [[ "$oper" == "destroy" ]]; then
-    echo "${YELLOW}Destroying resources...${RESET}"
+    echo "${YELLOW}============================================================${RESET}"
+    echo "${YELLOW}               DESTROY SUMMARY${RESET}"
+    echo "${YELLOW}============================================================${RESET}"
     echo ""
+    echo "  The following resources will be destroyed:"
+    echo ""
+    if [[ "$TF_VAR_deploy_ztgw" == "true" ]]; then
+        echo "  ${RED}- ZTGW '${TF_VAR_gateway_name}' from Zscaler${RESET}"
+    fi
+    if [[ "$TF_VAR_deploy_consumer" != "false" ]]; then
+        echo "  ${RED}- Consumer-side GCP resources (firewall policy, endpoint group, security profiles, firewall rules)${RESET}"
+    fi
+    echo ""
+    echo "${YELLOW}============================================================${RESET}"
+    echo ""
+
+    if [[ ! "$AUTO_APPROVE" ]]; then
+        while true; do
+            read -r -p "${CYAN}Are you sure you want to destroy all resources? (yes/no): ${RESET}" confirm_destroy
+            case $confirm_destroy in
+                yes|y)
+                    echo ""
+                    break
+                    ;;
+                no|n)
+                    echo "${GREEN}Destroy cancelled.${RESET}"
+                    exit 0
+                    ;;
+                *)
+                    echo "${RED}Invalid response. Please enter yes or no${RESET}"
+                    ;;
+            esac
+        done
+    fi
 
     # -----------------------------------------------------------------------
     # Step 1: Delete ZTGW from Zscaler (if deployed via zsec)
