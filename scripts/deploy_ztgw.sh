@@ -106,16 +106,22 @@ for t in templates:
     # -----------------------------------------------------------------------
     CREATE_PAYLOAD=$(python3 -c "
 import json
-print(json.dumps({
+region = '${GCP_REGION}'
+az_ids = [region + '-a', region + '-b']
+payload = {
     'name': '${GATEWAY_NAME}',
     'platform': 'GCP',
-    'region': '${GCP_REGION}',
+    'region': region,
+    'availabilityZoneIds': az_ids,
     'provData': {
         'locationName': '${LOCATION_NAME}',
         'locationTemplate': {'id': ${TEMPLATE_ID}},
-        'iamPrincipals': [{'type': 'USER', 'value': '${IAM_PRINCIPAL}'}]
     }
-}))
+}
+iam = '${IAM_PRINCIPAL}'
+if iam:
+    payload['provData']['iamPrincipals'] = [{'type': 'USER', 'value': iam}]
+print(json.dumps(payload))
 ")
 
     CREATE_RESPONSE=$(curl -sk -X POST "$BASE_URL/ztGateway" \

@@ -220,10 +220,10 @@ if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
         location_name=${location_name_input:-$location_name_default}
         echo "export TF_VAR_location_name='$location_name'" >> .zsecrc
 
-        while [ -z "$iam_principal_email" ]; do
-            read -r -p "${CYAN}Enter IAM principal email for the ZTGW: ${RESET}" iam_principal_email
-        done
-        echo "export TF_VAR_iam_principal_email='$iam_principal_email'" >> .zsecrc
+        read -r -p "${CYAN}Enter IAM principal email (optional, press Enter to skip): ${RESET}" iam_principal_email
+        if [ -n "$iam_principal_email" ]; then
+            echo "export TF_VAR_iam_principal_email='$iam_principal_email'" >> .zsecrc
+        fi
         echo ""
     fi
 
@@ -242,8 +242,10 @@ ${CYAN}(e.g. projects/zscaler-project/locations/global/interceptDeploymentGroups
     fi
 
     # -----------------------------------------------------------------------
-    # Step 5: Security profile scope
+    # Step 5: Consumer side configuration
     # -----------------------------------------------------------------------
+    echo "${YELLOW}=== Consumer Side Configuration ===${RESET}"
+    echo ""
     echo "${YELLOW}--- Security Profile Scope ---${RESET}"
     echo ""
     PS3="${CYAN}Select security profile scope: ${RESET}"
@@ -366,7 +368,7 @@ ${CYAN}(e.g. projects/zscaler-project/locations/global/interceptDeploymentGroups
         echo "  Gateway Name:         ${GREEN}$gateway_name${RESET}"
         echo "  GCP Region:           ${GREEN}$gcp_region${RESET}"
         echo "  Location Name:        ${GREEN}$location_name${RESET}"
-        echo "  IAM Principal:        ${GREEN}$iam_principal_email${RESET}"
+        echo "  IAM Principal:        ${GREEN}${iam_principal_email:-(none)}${RESET}"
     else
         echo "  Mode:                 ${GREEN}Consumer-only${RESET}"
         echo "  Intercept Dep. Group: ${GREEN}$intercept_deployment_group${RESET}"
