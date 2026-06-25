@@ -470,6 +470,21 @@ if [[ "$oper" == "up" ]]; then
 
 elif [[ "$oper" == "destroy" ]]; then
     echo "${YELLOW}Destroying GCP ZTGW + consumer NSI resources...${RESET}"
+    echo ""
+
+    # -----------------------------------------------------------------------
+    # Step 1: Delete ZTGW from Zscaler (if deployed via zsec)
+    # -----------------------------------------------------------------------
+    if [[ "$TF_VAR_deploy_ztgw" == "true" ]]; then
+        echo "${YELLOW}--- Deleting ZTGW from Zscaler ---${RESET}"
+        bash "$(dirname "$0")/scripts/destroy_ztgw.sh" || true
+        echo ""
+    fi
+
+    # -----------------------------------------------------------------------
+    # Step 2: Destroy consumer-side GCP resources via Terraform
+    # -----------------------------------------------------------------------
+    echo "${YELLOW}--- Destroying consumer-side GCP resources ---${RESET}"
     ./bin/terraform init
 
     if [[ "$AUTO_APPROVE" ]]; then
