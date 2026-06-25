@@ -49,24 +49,28 @@ data "external" "ztgw" {
 # ---------------------------------------------------------------------------
 
 data "google_compute_network" "consumer" {
+  count   = var.deploy_consumer ? 1 : 0
   name    = var.consumer_network
   project = var.project_id
 }
 
 resource "google_compute_network_firewall_policy" "consumer" {
+  count       = var.deploy_consumer ? 1 : 0
   name        = local.consumer_fw_policy
   project     = var.project_id
   description = "Consumer firewall policy for Zscaler GCP NSI intercept integration."
 }
 
 resource "google_compute_network_firewall_policy_association" "consumer" {
+  count             = var.deploy_consumer ? 1 : 0
   name              = local.consumer_fw_policy_association
   project           = var.project_id
-  attachment_target = data.google_compute_network.consumer.id
-  firewall_policy   = google_compute_network_firewall_policy.consumer.id
+  attachment_target = data.google_compute_network.consumer[0].id
+  firewall_policy   = google_compute_network_firewall_policy.consumer[0].id
 }
 
 resource "google_network_security_intercept_endpoint_group" "consumer" {
+  count    = var.deploy_consumer ? 1 : 0
   provider = google-beta
 
   intercept_endpoint_group_id = local.endpoint_group
@@ -76,13 +80,14 @@ resource "google_network_security_intercept_endpoint_group" "consumer" {
 }
 
 resource "google_network_security_intercept_endpoint_group_association" "consumer" {
+  count    = var.deploy_consumer ? 1 : 0
   provider = google-beta
 
   intercept_endpoint_group_association_id = local.endpoint_group_association
   project                                 = var.project_id
   location                                = var.location
-  network                                 = data.google_compute_network.consumer.id
-  intercept_endpoint_group                = google_network_security_intercept_endpoint_group.consumer.id
+  network                                 = data.google_compute_network.consumer[0].id
+  intercept_endpoint_group                = google_network_security_intercept_endpoint_group.consumer[0].id
 
   depends_on = [
     google_network_security_intercept_endpoint_group.consumer
@@ -90,6 +95,7 @@ resource "google_network_security_intercept_endpoint_group_association" "consume
 }
 
 resource "google_network_security_security_profile" "custom_intercept" {
+  count    = var.deploy_consumer ? 1 : 0
   provider = google-beta
 
   name        = local.security_profile
@@ -99,7 +105,7 @@ resource "google_network_security_security_profile" "custom_intercept" {
   type        = "CUSTOM_INTERCEPT"
 
   custom_intercept_profile {
-    intercept_endpoint_group = google_network_security_intercept_endpoint_group.consumer.id
+    intercept_endpoint_group = google_network_security_intercept_endpoint_group.consumer[0].id
   }
 
   depends_on = [
@@ -108,13 +114,14 @@ resource "google_network_security_security_profile" "custom_intercept" {
 }
 
 resource "google_network_security_security_profile_group" "consumer" {
+  count    = var.deploy_consumer ? 1 : 0
   provider = google-beta
 
   name                     = local.security_profile_group
   parent                   = local.security_profile_parent
   location                 = var.location
   description              = "Security profile group for Zscaler GCP NSI integration."
-  custom_intercept_profile = google_network_security_security_profile.custom_intercept.id
+  custom_intercept_profile = google_network_security_security_profile.custom_intercept[0].id
 
   depends_on = [
     google_network_security_security_profile.custom_intercept
@@ -122,8 +129,9 @@ resource "google_network_security_security_profile_group" "consumer" {
 }
 
 resource "google_compute_network_firewall_policy_rule" "ingress_allow" {
+  count           = var.deploy_consumer ? 1 : 0
   project         = var.project_id
-  firewall_policy = google_compute_network_firewall_policy.consumer.name
+  firewall_policy = google_compute_network_firewall_policy.consumer[0].name
   priority        = var.allow_ingress_rule_priority
   direction       = "INGRESS"
   action          = "allow"
@@ -144,12 +152,13 @@ resource "google_compute_network_firewall_policy_rule" "ingress_allow" {
 }
 
 resource "google_compute_network_firewall_policy_rule" "ingress_intercept" {
+  count                  = var.deploy_consumer ? 1 : 0
   project                = var.project_id
-  firewall_policy        = google_compute_network_firewall_policy.consumer.name
+  firewall_policy        = google_compute_network_firewall_policy.consumer[0].name
   priority               = var.ingress_rule_priority
   direction              = "INGRESS"
   action                 = "apply_security_profile_group"
-  security_profile_group = "//networksecurity.googleapis.com/${google_network_security_security_profile_group.consumer.id}"
+  security_profile_group = "//networksecurity.googleapis.com/${google_network_security_security_profile_group.consumer[0].id}"
   enable_logging         = var.enable_firewall_logging
   description            = "Apply Zscaler GCP NSI security profile group to ingress traffic."
 
@@ -168,12 +177,13 @@ resource "google_compute_network_firewall_policy_rule" "ingress_intercept" {
 }
 
 resource "google_compute_network_firewall_policy_rule" "egress_intercept" {
+  count                  = var.deploy_consumer ? 1 : 0
   project                = var.project_id
-  firewall_policy        = google_compute_network_firewall_policy.consumer.name
+  firewall_policy        = google_compute_network_firewall_policy.consumer[0].name
   priority               = var.egress_rule_priority
   direction              = "EGRESS"
   action                 = "apply_security_profile_group"
-  security_profile_group = "//networksecurity.googleapis.com/${google_network_security_security_profile_group.consumer.id}"
+  security_profile_group = "//networksecurity.googleapis.com/${google_network_security_security_profile_group.consumer[0].id}"
   enable_logging         = var.enable_firewall_logging
   description            = "Apply Zscaler GCP NSI security profile group to egress traffic."
 

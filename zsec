@@ -113,6 +113,7 @@ if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
     PS3="${CYAN}Select deployment mode: ${RESET}"
     modes=(
         "Full deployment — Deploy ZTGW + consumer NSI resources (Recommended)"
+        "ZTGW-only — Deploy ZTGW and output intercept deployment group"
         "Consumer-only — Connect existing ZTGW to consumer VPC"
     )
     select mode_choice in "${modes[@]}"; do
@@ -120,24 +121,36 @@ if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
             1)
                 echo "${GREEN}Full deployment selected${RESET}"
                 deploy_ztgw=true
+                deploy_consumer=true
                 echo "export TF_VAR_deploy_ztgw=true" >> .zsecrc
+                echo "export TF_VAR_deploy_consumer=true" >> .zsecrc
                 break
                 ;;
             2)
+                echo "${GREEN}ZTGW-only deployment selected${RESET}"
+                deploy_ztgw=true
+                deploy_consumer=false
+                echo "export TF_VAR_deploy_ztgw=true" >> .zsecrc
+                echo "export TF_VAR_deploy_consumer=false" >> .zsecrc
+                break
+                ;;
+            3)
                 echo "${GREEN}Consumer-only deployment selected${RESET}"
                 deploy_ztgw=false
+                deploy_consumer=true
                 echo "export TF_VAR_deploy_ztgw=false" >> .zsecrc
+                echo "export TF_VAR_deploy_consumer=true" >> .zsecrc
                 break
                 ;;
             *)
-                echo "${RED}Invalid selection. Enter 1 or 2${RESET}"
+                echo "${RED}Invalid selection. Enter 1, 2, or 3${RESET}"
                 ;;
         esac
     done
     echo ""
 
     # -----------------------------------------------------------------------
-    # Step 2: Zscaler OneAPI credentials (both modes)
+    # Step 2: Zscaler OneAPI credentials (all modes)
     # -----------------------------------------------------------------------
     echo "${YELLOW}--- Zscaler OneAPI Authentication ---${RESET}"
     echo ""
@@ -174,7 +187,7 @@ if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
     echo ""
 
     # -----------------------------------------------------------------------
-    # Step 3: ZTGW parameters (full deployment only)
+    # Step 3: ZTGW parameters (full + ZTGW-only modes)
     # -----------------------------------------------------------------------
     if [[ "$deploy_ztgw" == "true" ]]; then
         echo "${YELLOW}--- GCP ZTGW Configuration ---${RESET}"
@@ -242,112 +255,113 @@ ${CYAN}(e.g. projects/zscaler-project/locations/global/interceptDeploymentGroups
     fi
 
     # -----------------------------------------------------------------------
-    # Step 5: Consumer side configuration
+    # Step 5-7: Consumer side configuration (full + consumer-only modes)
     # -----------------------------------------------------------------------
-    echo "${YELLOW}=== Consumer Side Configuration ===${RESET}"
-    echo ""
-    echo "${YELLOW}--- Security Profile Scope ---${RESET}"
-    echo ""
-    PS3="${CYAN}Select security profile scope: ${RESET}"
-    scopes=(
-        "Organization level (Recommended)"
-        "Project level"
-    )
-    select scope_choice in "${scopes[@]}"; do
-        case $REPLY in
-            1)
-                security_profile_scope="organization"
-                echo "${GREEN}Scope: organization${RESET}"
-                echo "export TF_VAR_security_profile_scope='organization'" >> .zsecrc
-                break
-                ;;
-            2)
-                security_profile_scope="project"
-                echo "${GREEN}Scope: project${RESET}"
-                echo "export TF_VAR_security_profile_scope='project'" >> .zsecrc
-                break
-                ;;
-            *)
-                echo "${RED}Invalid selection. Enter 1 or 2${RESET}"
-                ;;
-        esac
-    done
-    echo ""
+    if [[ "$deploy_consumer" == "true" ]]; then
 
-    # -----------------------------------------------------------------------
-    # Step 6: GCP consumer project configuration
-    # -----------------------------------------------------------------------
-    echo "${YELLOW}--- GCP Consumer Project ---${RESET}"
-    echo ""
+        echo "${YELLOW}=== Consumer Side Configuration ===${RESET}"
+        echo ""
 
-    while [ -z "$project_id" ]; do
-        read -r -p "${CYAN}Enter GCP project ID: ${RESET}" project_id
-    done
-    echo "export TF_VAR_project_id='$project_id'" >> .zsecrc
-
-    if [[ "$security_profile_scope" == "organization" ]]; then
-        while [ -z "$organization_id" ]; do
-            read -r -p "${CYAN}Enter GCP organization ID: ${RESET}" organization_id
+        # --- Security Profile Scope ---
+        echo "${YELLOW}--- Security Profile Scope ---${RESET}"
+        echo ""
+        PS3="${CYAN}Select security profile scope: ${RESET}"
+        scopes=(
+            "Organization level (Recommended)"
+            "Project level"
+        )
+        select scope_choice in "${scopes[@]}"; do
+            case $REPLY in
+                1)
+                    security_profile_scope="organization"
+                    echo "${GREEN}Scope: organization${RESET}"
+                    echo "export TF_VAR_security_profile_scope='organization'" >> .zsecrc
+                    break
+                    ;;
+                2)
+                    security_profile_scope="project"
+                    echo "${GREEN}Scope: project${RESET}"
+                    echo "export TF_VAR_security_profile_scope='project'" >> .zsecrc
+                    break
+                    ;;
+                *)
+                    echo "${RED}Invalid selection. Enter 1 or 2${RESET}"
+                    ;;
+            esac
         done
-        echo "export TF_VAR_organization_id='$organization_id'" >> .zsecrc
+        echo ""
+
+        # --- GCP Consumer Project ---
+        echo "${YELLOW}--- GCP Consumer Project ---${RESET}"
+        echo ""
+
+        while [ -z "$project_id" ]; do
+            read -r -p "${CYAN}Enter GCP project ID: ${RESET}" project_id
+        done
+        echo "export TF_VAR_project_id='$project_id'" >> .zsecrc
+
+        if [[ "$security_profile_scope" == "organization" ]]; then
+            while [ -z "$organization_id" ]; do
+                read -r -p "${CYAN}Enter GCP organization ID: ${RESET}" organization_id
+            done
+            echo "export TF_VAR_organization_id='$organization_id'" >> .zsecrc
+        fi
+
+        billing_default="$project_id"
+        read -r -p "${CYAN}Enter billing project ID [Default=$billing_default]: ${RESET}" billing_input
+        billing_project_id=${billing_input:-$billing_default}
+        echo "export TF_VAR_billing_project_id='$billing_project_id'" >> .zsecrc
+
+        while [ -z "$consumer_network" ]; do
+            read -r -p "${CYAN}Enter existing consumer VPC network name: ${RESET}" consumer_network
+        done
+        echo "export TF_VAR_consumer_network='$consumer_network'" >> .zsecrc
+
+        deploy_key_default="ztgw-nsi"
+        read -r -p "${CYAN}Enter naming prefix for consumer resources [Default=$deploy_key_default]: ${RESET}" deploy_key_input
+        deploy_key=${deploy_key_input:-$deploy_key_default}
+        echo "export TF_VAR_deploy_key='$deploy_key'" >> .zsecrc
+        echo ""
+
+        # --- Firewall Policy Rules ---
+        echo "${YELLOW}--- Firewall Policy Rules ---${RESET}"
+        echo ""
+
+        ingress_default="10.1.0.0/16"
+        read -r -p "${CYAN}Enter ingress source CIDR ranges for inspection [Default=$ingress_default]: ${RESET}" ingress_input
+        ingress_source_ranges=${ingress_input:-$ingress_default}
+        echo "export TF_VAR_ingress_source_ranges='[\"$ingress_source_ranges\"]'" >> .zsecrc
+
+        egress_default="0.0.0.0/0"
+        read -r -p "${CYAN}Enter egress destination CIDR ranges for inspection [Default=$egress_default]: ${RESET}" egress_input
+        egress_destination_ranges=${egress_input:-$egress_default}
+        echo "export TF_VAR_egress_destination_ranges='[\"$egress_destination_ranges\"]'" >> .zsecrc
+
+        allow_default="34.117.59.81/32"
+        read -r -p "${CYAN}Enter ingress source CIDRs to bypass inspection [Default=$allow_default]: ${RESET}" allow_input
+        allow_ingress_source_ranges=${allow_input:-$allow_default}
+        echo "export TF_VAR_allow_ingress_source_ranges='[\"$allow_ingress_source_ranges\"]'" >> .zsecrc
+
+        fw_logging_default="yes"
+        while true; do
+            read -r -p "${CYAN}Enable firewall rule logging? [Default=$fw_logging_default]: ${RESET}" fw_logging_input
+            fw_logging=${fw_logging_input:-$fw_logging_default}
+            case $fw_logging in
+                yes|y)
+                    echo "export TF_VAR_enable_firewall_logging=true" >> .zsecrc
+                    break
+                    ;;
+                no|n)
+                    echo "export TF_VAR_enable_firewall_logging=false" >> .zsecrc
+                    break
+                    ;;
+                *)
+                    echo "${RED}Invalid response. Please enter yes or no${RESET}"
+                    ;;
+            esac
+        done
+        echo ""
     fi
-
-    billing_default="$project_id"
-    read -r -p "${CYAN}Enter billing project ID [Default=$billing_default]: ${RESET}" billing_input
-    billing_project_id=${billing_input:-$billing_default}
-    echo "export TF_VAR_billing_project_id='$billing_project_id'" >> .zsecrc
-
-    while [ -z "$consumer_network" ]; do
-        read -r -p "${CYAN}Enter existing consumer VPC network name: ${RESET}" consumer_network
-    done
-    echo "export TF_VAR_consumer_network='$consumer_network'" >> .zsecrc
-
-    deploy_key_default="ztgw-nsi"
-    read -r -p "${CYAN}Enter naming prefix for consumer resources [Default=$deploy_key_default]: ${RESET}" deploy_key_input
-    deploy_key=${deploy_key_input:-$deploy_key_default}
-    echo "export TF_VAR_deploy_key='$deploy_key'" >> .zsecrc
-    echo ""
-
-    # -----------------------------------------------------------------------
-    # Step 7: Firewall rules
-    # -----------------------------------------------------------------------
-    echo "${YELLOW}--- Firewall Policy Rules ---${RESET}"
-    echo ""
-
-    ingress_default="10.1.0.0/16"
-    read -r -p "${CYAN}Enter ingress source CIDR ranges for inspection [Default=$ingress_default]: ${RESET}" ingress_input
-    ingress_source_ranges=${ingress_input:-$ingress_default}
-    echo "export TF_VAR_ingress_source_ranges='[\"$ingress_source_ranges\"]'" >> .zsecrc
-
-    egress_default="0.0.0.0/0"
-    read -r -p "${CYAN}Enter egress destination CIDR ranges for inspection [Default=$egress_default]: ${RESET}" egress_input
-    egress_destination_ranges=${egress_input:-$egress_default}
-    echo "export TF_VAR_egress_destination_ranges='[\"$egress_destination_ranges\"]'" >> .zsecrc
-
-    allow_default="34.117.59.81/32"
-    read -r -p "${CYAN}Enter ingress source CIDRs to bypass inspection [Default=$allow_default]: ${RESET}" allow_input
-    allow_ingress_source_ranges=${allow_input:-$allow_default}
-    echo "export TF_VAR_allow_ingress_source_ranges='[\"$allow_ingress_source_ranges\"]'" >> .zsecrc
-
-    fw_logging_default="yes"
-    while true; do
-        read -r -p "${CYAN}Enable firewall rule logging? [Default=$fw_logging_default]: ${RESET}" fw_logging_input
-        fw_logging=${fw_logging_input:-$fw_logging_default}
-        case $fw_logging in
-            yes|y)
-                echo "export TF_VAR_enable_firewall_logging=true" >> .zsecrc
-                break
-                ;;
-            no|n)
-                echo "export TF_VAR_enable_firewall_logging=false" >> .zsecrc
-                break
-                ;;
-            *)
-                echo "${RED}Invalid response. Please enter yes or no${RESET}"
-                ;;
-        esac
-    done
-    echo ""
 
     # -----------------------------------------------------------------------
     # Step 8: Add PATH to .zsecrc
@@ -363,30 +377,41 @@ ${CYAN}(e.g. projects/zscaler-project/locations/global/interceptDeploymentGroups
     echo "${GREEN}               DEPLOYMENT SUMMARY${RESET}"
     echo "${GREEN}============================================================${RESET}"
     echo ""
-    if [[ "$deploy_ztgw" == "true" ]]; then
+    if [[ "$deploy_ztgw" == "true" && "$deploy_consumer" == "true" ]]; then
         echo "  Mode:                 ${GREEN}Full deployment (ZTGW + consumer)${RESET}"
+    elif [[ "$deploy_ztgw" == "true" && "$deploy_consumer" == "false" ]]; then
+        echo "  Mode:                 ${GREEN}ZTGW-only${RESET}"
+    else
+        echo "  Mode:                 ${GREEN}Consumer-only${RESET}"
+    fi
+
+    if [[ "$deploy_ztgw" == "true" ]]; then
         echo "  Gateway Name:         ${GREEN}$gateway_name${RESET}"
         echo "  GCP Region:           ${GREEN}$gcp_region${RESET}"
         echo "  Location Name:        ${GREEN}$location_name${RESET}"
         echo "  IAM Principal:        ${GREEN}${iam_principal_email:-(none)}${RESET}"
-    else
-        echo "  Mode:                 ${GREEN}Consumer-only${RESET}"
+    fi
+    if [[ "$deploy_ztgw" == "false" ]]; then
         echo "  Intercept Dep. Group: ${GREEN}$intercept_deployment_group${RESET}"
     fi
+
     echo "  Cloud:                ${GREEN}$cloud${RESET}"
     echo "  Vanity Domain:        ${GREEN}$vanity_domain${RESET}"
-    echo "  Profile Scope:        ${GREEN}$security_profile_scope${RESET}"
-    echo "  Project ID:           ${GREEN}$project_id${RESET}"
-    if [[ "$security_profile_scope" == "organization" ]]; then
-        echo "  Organization ID:      ${GREEN}$organization_id${RESET}"
+
+    if [[ "$deploy_consumer" == "true" ]]; then
+        echo "  Profile Scope:        ${GREEN}$security_profile_scope${RESET}"
+        echo "  Project ID:           ${GREEN}$project_id${RESET}"
+        if [[ "$security_profile_scope" == "organization" ]]; then
+            echo "  Organization ID:      ${GREEN}$organization_id${RESET}"
+        fi
+        echo "  Billing Project:      ${GREEN}$billing_project_id${RESET}"
+        echo "  Consumer VPC:         ${GREEN}$consumer_network${RESET}"
+        echo "  Deploy Key:           ${GREEN}$deploy_key${RESET}"
+        echo "  Ingress CIDRs:        ${GREEN}$ingress_source_ranges${RESET}"
+        echo "  Egress CIDRs:         ${GREEN}$egress_destination_ranges${RESET}"
+        echo "  Bypass CIDRs:         ${GREEN}$allow_ingress_source_ranges${RESET}"
+        echo "  Firewall Logging:     ${GREEN}$fw_logging${RESET}"
     fi
-    echo "  Billing Project:      ${GREEN}$billing_project_id${RESET}"
-    echo "  Consumer VPC:         ${GREEN}$consumer_network${RESET}"
-    echo "  Deploy Key:           ${GREEN}$deploy_key${RESET}"
-    echo "  Ingress CIDRs:        ${GREEN}$ingress_source_ranges${RESET}"
-    echo "  Egress CIDRs:         ${GREEN}$egress_destination_ranges${RESET}"
-    echo "  Bypass CIDRs:         ${GREEN}$allow_ingress_source_ranges${RESET}"
-    echo "  Firewall Logging:     ${GREEN}$fw_logging${RESET}"
     echo ""
     echo "${GREEN}============================================================${RESET}"
     echo ""
@@ -419,8 +444,26 @@ if [[ -e ./.zsecrc ]]; then
     . ./.zsecrc
 else
     if [[ "$oper" == "destroy" ]]; then
-        echo "${RED}.zsecrc not found. Nothing to destroy or configuration was already cleaned up.${RESET}"
-        exit 1
+        # Check for archived .zsecrc files
+        latest_archive=$(ls -t .zsecrc-* 2>/dev/null | head -1)
+        if [ -n "$latest_archive" ]; then
+            echo "${YELLOW}.zsecrc not found, but archived config found: ${latest_archive}${RESET}"
+            read -r -p "${CYAN}Use this config for destroy? (yes/no): ${RESET}" use_archive
+            case $use_archive in
+                yes|y)
+                    cp "$latest_archive" .zsecrc
+                    echo "${GREEN}Restored .zsecrc from ${latest_archive}${RESET}"
+                    . ./.zsecrc
+                    ;;
+                *)
+                    echo "${RED}Cannot destroy without configuration. Exiting.${RESET}"
+                    exit 1
+                    ;;
+            esac
+        else
+            echo "${RED}.zsecrc not found. Nothing to destroy or configuration was already cleaned up.${RESET}"
+            exit 1
+        fi
     fi
 fi
 
@@ -433,9 +476,11 @@ if [ -z "$TF_VAR_client_id" ] || [ -z "$TF_VAR_client_secret" ] || [ -z "$TF_VAR
     exit 1
 fi
 
-if [ -z "$TF_VAR_project_id" ] || [ -z "$TF_VAR_consumer_network" ]; then
-    echo "${RED}GCP project or consumer network is missing. Delete .zsecrc and re-run './zsec up'${RESET}"
-    exit 1
+if [[ "$TF_VAR_deploy_consumer" != "false" ]]; then
+    if [ -z "$TF_VAR_project_id" ] || [ -z "$TF_VAR_consumer_network" ]; then
+        echo "${RED}GCP project or consumer network is missing. Delete .zsecrc and re-run './zsec up'${RESET}"
+        exit 1
+    fi
 fi
 
 if [[ "$TF_VAR_deploy_ztgw" == "false" && -z "$TF_VAR_intercept_deployment_group" ]]; then
@@ -452,7 +497,14 @@ if [[ "$oper" == "up" ]]; then
     ./bin/terraform init
 
     echo ""
-    echo "${GREEN}Deploying GCP ZTGW + consumer NSI resources...${RESET}"
+    if [[ "$TF_VAR_deploy_consumer" == "false" ]]; then
+        echo "${GREEN}Deploying GCP ZTGW...${RESET}"
+    elif [[ "$TF_VAR_deploy_ztgw" == "false" ]]; then
+        echo "${GREEN}Deploying consumer NSI resources...${RESET}"
+    else
+        echo "${GREEN}Deploying GCP ZTGW + consumer NSI resources...${RESET}"
+    fi
+
     if [[ "$AUTO_APPROVE" ]]; then
         ./bin/terraform apply -auto-approve
     else
@@ -469,7 +521,7 @@ if [[ "$oper" == "up" ]]; then
     echo ""
 
 elif [[ "$oper" == "destroy" ]]; then
-    echo "${YELLOW}Destroying GCP ZTGW + consumer NSI resources...${RESET}"
+    echo "${YELLOW}Destroying resources...${RESET}"
     echo ""
 
     # -----------------------------------------------------------------------
@@ -482,15 +534,19 @@ elif [[ "$oper" == "destroy" ]]; then
     fi
 
     # -----------------------------------------------------------------------
-    # Step 2: Destroy consumer-side GCP resources via Terraform
+    # Step 2: Destroy consumer-side GCP resources via Terraform (if deployed)
     # -----------------------------------------------------------------------
-    echo "${YELLOW}--- Destroying consumer-side GCP resources ---${RESET}"
-    ./bin/terraform init
+    if [[ "$TF_VAR_deploy_consumer" != "false" ]]; then
+        echo "${YELLOW}--- Destroying consumer-side GCP resources ---${RESET}"
+        ./bin/terraform init
 
-    if [[ "$AUTO_APPROVE" ]]; then
-        ./bin/terraform destroy -auto-approve
+        if [[ "$AUTO_APPROVE" ]]; then
+            ./bin/terraform destroy -auto-approve
+        else
+            ./bin/terraform destroy
+        fi
     else
-        ./bin/terraform destroy
+        echo "${YELLOW}No consumer resources to destroy (ZTGW-only mode).${RESET}"
     fi
 
     echo ""

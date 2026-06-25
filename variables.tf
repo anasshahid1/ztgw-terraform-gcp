@@ -8,6 +8,12 @@ variable "deploy_ztgw" {
   default     = true
 }
 
+variable "deploy_consumer" {
+  description = "Deploy consumer-side GCP NSI resources. Set to false for ZTGW-only mode."
+  type        = bool
+  default     = true
+}
+
 # ---------------------------------------------------------------------------
 # Zscaler OneAPI authentication (required when deploy_ztgw = true)
 # ---------------------------------------------------------------------------
@@ -99,8 +105,9 @@ variable "security_profile_scope" {
 # ---------------------------------------------------------------------------
 
 variable "project_id" {
-  description = "GCP project where consumer VPC and endpoint group are deployed."
+  description = "GCP project where consumer VPC and endpoint group are deployed. Required when deploy_consumer = true."
   type        = string
+  default     = ""
 }
 
 variable "organization_id" {
@@ -110,8 +117,9 @@ variable "organization_id" {
 }
 
 variable "billing_project_id" {
-  description = "Billing/quota project for organization-level Network Security resources. Usually the same as project_id."
+  description = "Billing/quota project for organization-level Network Security resources. Usually the same as project_id. Required when deploy_consumer = true."
   type        = string
+  default     = ""
 }
 
 variable "region" {
@@ -127,8 +135,9 @@ variable "location" {
 }
 
 variable "consumer_network" {
-  description = "Existing consumer VPC network name."
+  description = "Existing consumer VPC network name. Required when deploy_consumer = true."
   type        = string
+  default     = ""
 }
 
 # ---------------------------------------------------------------------------
