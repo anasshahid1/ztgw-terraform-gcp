@@ -4,6 +4,13 @@
 *.tfstate.backup
 .terraform.lock.hcl
 terraform.tfvars
+tfplan
+
+# zsec config
+.zsecrc
+.zsecrc-*
+.zsecrc.bak
+bin/
 
 # OS
 .DS_Store
