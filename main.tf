@@ -1,13 +1,15 @@
 locals {
   # Intercept deployment group: auto-wired from ZTGW or explicit
-  intercept_deployment_group = var.deploy_ztgw
+  intercept_deployment_group = (var.deploy_ztgw
     ? ztc_forwarding_gateway.gcp_ztgw[0].intercept_deployment_group
     : var.intercept_deployment_group
+  )
 
   # Security profile parent scope
-  security_profile_parent = var.security_profile_scope == "project"
+  security_profile_parent = (var.security_profile_scope == "project"
     ? "projects/${var.project_id}"
     : "organizations/${var.organization_id}"
+  )
 
   # Resource names with optional overrides
   consumer_fw_policy             = var.consumer_fw_policy != "" ? var.consumer_fw_policy : "${var.deploy_key}-consumer-policy"
