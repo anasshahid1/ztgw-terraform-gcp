@@ -107,7 +107,40 @@ for gw in gateways:
 
 if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "" ]; then
     GATEWAY_ID="$EXISTING_ID"
-    echo "Found existing ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID})" >&2
+    echo "Found existing ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID}). Checking health..." >&2
+
+    # Single health check — skip polling if already healthy
+    GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+    HEALTH_RAW=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthStatus','UNKNOWN'))" 2>/dev/null || echo "PARSE_ERROR")
+    HEALTH=$(echo "$HEALTH_RAW" | tr '[:lower:]' '[:upper:]')
+
+    if [ "$HEALTH" = "HEALTHY" ]; then
+        echo "ZTGW already HEALTHY — returning immediately" >&2
+
+        IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
+        if [ -z "$IDG" ]; then
+            echo "{\"error\": \"ZTGW $GATEWAY_ID is HEALTHY but interceptDeploymentGroup is not yet populated. Re-run terraform apply in a few minutes.\"}" >&2
+            exit 1
+        fi
+
+        # Extract outputs and return immediately
+        echo "$GW_RESPONSE" | python3 -c "
+import sys, json
+gw = json.load(sys.stdin)
+print(json.dumps({
+    'gateway_id': str(gw.get('id', '')),
+    'gateway_name': gw.get('name', ''),
+    'region': gw.get('region', ''),
+    'health_status': gw.get('healthStatus', 'UNKNOWN'),
+    'intercept_deployment_group': gw.get('interceptDeploymentGroup', ''),
+    'intercept_endpoint_groups_count': str(gw.get('interceptEndpointGroupsCount', '0'))
+}))
+"
+        exit 0
+    fi
+
+    echo "ZTGW exists but not HEALTHY ($HEALTH_RAW). Entering polling loop..." >&2
+    NEEDS_POLLING=true
 else
     # -----------------------------------------------------------------------
     # Get location template ID
