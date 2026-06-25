@@ -139,8 +139,15 @@ print(json.dumps({
         exit 0
     fi
 
-    echo "ZTGW exists but not HEALTHY ($HEALTH_RAW). Entering polling loop..." >&2
-    NEEDS_POLLING=true
+    # Set shorter timeouts for existing gateways based on current state
+    if [ "$HEALTH" = "INIT" ]; then
+        MAX_WAIT=300
+        echo "ZTGW exists but still in INIT state. Polling for up to 5 minutes..." >&2
+    else
+        MAX_WAIT=180
+        echo "ZTGW exists but UNHEALTHY ($HEALTH_RAW). Polling for up to 3 minutes..." >&2
+    fi
+    IS_NEW=false
 else
     # -----------------------------------------------------------------------
     # Get location template ID
@@ -196,13 +203,14 @@ print(json.dumps(payload))
         echo "$CREATE_RESPONSE" >&2
         exit 1
     fi
-    echo "ZTGW created (ID: ${GATEWAY_ID}). Waiting for HEALTHY status..." >&2
+    echo "ZTGW created (ID: ${GATEWAY_ID}). Waiting for HEALTHY status (up to 15 minutes)..." >&2
+    MAX_WAIT=900
+    IS_NEW=true
 fi
 
 # ---------------------------------------------------------------------------
-# Poll for health status (up to 15 minutes, wall-clock time)
+# Poll for health status (timeout varies: 15min new, 5min INIT, 3min UNHEALTHY)
 # ---------------------------------------------------------------------------
-MAX_WAIT=900
 INTERVAL=15
 START_TIME=$(date +%s)
 
