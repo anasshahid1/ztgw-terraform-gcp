@@ -48,27 +48,6 @@ This configuration creates two sets of resources across two clouds:
 | `google_network_security_security_profile_group` | `hashicorp/google-beta` | Security profile group (referenced by firewall rules) |
 | `google_compute_network_firewall_policy_rule` | `hashicorp/google` | Ingress allow, ingress intercept, and egress intercept rules |
 
-### Traffic Flow
-
-```
-External Traffic
-     │
-     ▼
-Consumer VPC ──► Firewall Policy ──► Security Profile Group ──►
-                                          │
-                                          ▼
-                              Security Profile (CUSTOM_INTERCEPT)
-                                          │
-                                          ▼
-                              Intercept Endpoint Group
-                                          │
-                                          ▼
-                              Intercept Deployment Group
-                                          │
-                                          ▼
-                              ZTGW (Zscaler GCP) ──► Zscaler Cloud
-```
-
 ---
 
 ## Prerequisites
