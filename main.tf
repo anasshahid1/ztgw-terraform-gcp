@@ -1,7 +1,7 @@
 locals {
   # Intercept deployment group: auto-wired from ZTGW or explicit
   intercept_deployment_group = (var.deploy_ztgw
-    ? ztc_forwarding_gateway.gcp_ztgw[0].intercept_deployment_group
+    ? data.external.ztgw[0].result["intercept_deployment_group"]
     : var.intercept_deployment_group
   )
 
@@ -21,37 +21,27 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# Provider side: GCP Zero Trust Gateway
+# Provider side: GCP Zero Trust Gateway (via Zscaler REST API)
+# ---------------------------------------------------------------------------
+# The ZTC Terraform provider does not yet have a native ZTGW resource.
+# This external data source calls the Zscaler REST API to deploy the ZTGW
+# and returns the intercept_deployment_group for use by consumer resources.
 # ---------------------------------------------------------------------------
 
-data "ztc_location_template" "default" {
-  count = var.deploy_ztgw ? 1 : 0
-  name  = "Default Location Template"
-}
+data "external" "ztgw" {
+  count   = var.deploy_ztgw ? 1 : 0
+  program = ["bash", "${path.module}/scripts/deploy_ztgw.sh"]
 
-resource "ztc_forwarding_gateway" "gcp_ztgw" {
-  count    = var.deploy_ztgw ? 1 : 0
-  name     = var.gateway_name
-  platform = "GCP"
-  region   = var.gcp_region
-
-  prov_data {
-    location_name = var.location_name
-
-    location_template {
-      id = data.ztc_location_template.default[0].id
-    }
-
-    iam_principals {
-      type  = "USER"
-      value = var.iam_principal_email
-    }
+  query = {
+    client_id           = var.client_id
+    client_secret       = var.client_secret
+    vanity_domain       = var.vanity_domain
+    cloud               = var.cloud
+    gateway_name        = var.gateway_name
+    gcp_region          = var.gcp_region
+    location_name       = var.location_name
+    iam_principal_email = var.iam_principal_email
   }
-}
-
-resource "ztc_activation_status" "activate" {
-  count      = var.deploy_ztgw ? 1 : 0
-  depends_on = [ztc_forwarding_gateway.gcp_ztgw]
 }
 
 # ---------------------------------------------------------------------------
