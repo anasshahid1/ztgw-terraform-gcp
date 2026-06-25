@@ -157,6 +157,21 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 done
 
 # ---------------------------------------------------------------------------
+# Validate health and intercept deployment group
+# ---------------------------------------------------------------------------
+if [ "$HEALTH" != "HEALTHY" ]; then
+    echo "{\"error\": \"ZTGW $GATEWAY_ID did not reach HEALTHY status within ${MAX_WAIT}s (current: $HEALTH). Re-run terraform apply after the gateway is healthy.\"}" >&2
+    exit 1
+fi
+
+IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
+
+if [ -z "$IDG" ]; then
+    echo "{\"error\": \"ZTGW $GATEWAY_ID is HEALTHY but interceptDeploymentGroup is not yet populated. Re-run terraform apply in a few minutes.\"}" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # Extract outputs
 # ---------------------------------------------------------------------------
 RESULT=$(echo "$GW_RESPONSE" | python3 -c "
