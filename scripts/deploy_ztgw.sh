@@ -51,25 +51,50 @@ TOKEN_URL="https://${VANITY_DOMAIN}.${LOGIN_DOMAIN}/oauth2/v1/token"
 BASE_URL="https://connector.${CLOUD}.net/api/v1"
 
 # ---------------------------------------------------------------------------
-# Authenticate
+# Authentication function (reusable for token refresh)
 # ---------------------------------------------------------------------------
-TOKEN_RESPONSE=$(curl -sk -X POST "$TOKEN_URL" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}")
+authenticate() {
+    local token_resp
+    token_resp=$(curl -sk --connect-timeout 10 --max-time 30 -X POST "$TOKEN_URL" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" 2>/dev/null)
 
-ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+    ACCESS_TOKEN=$(echo "$token_resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
 
-if [ -z "$ACCESS_TOKEN" ]; then
-    echo '{"error": "Authentication failed"}' >&2
-    exit 1
-fi
+    if [ -z "$ACCESS_TOKEN" ]; then
+        echo '{"error": "Authentication failed"}' >&2
+        exit 1
+    fi
 
-AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
+    AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
+    TOKEN_TIME=$(date +%s)
+    echo "Authenticated successfully" >&2
+}
+
+# ---------------------------------------------------------------------------
+# Refresh token if older than 4 minutes (tokens expire in ~1 hour,
+# but refresh proactively to avoid mid-poll expiration)
+# ---------------------------------------------------------------------------
+refresh_token_if_needed() {
+    local now
+    now=$(date +%s)
+    local age=$((now - TOKEN_TIME))
+    if [ $age -ge 240 ]; then
+        echo "Refreshing OAuth2 token (age: ${age}s)..." >&2
+        authenticate
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Initial authentication
+# ---------------------------------------------------------------------------
+authenticate
 
 # ---------------------------------------------------------------------------
 # Check if ZTGW already exists by name
 # ---------------------------------------------------------------------------
-EXISTING=$(curl -sk "$BASE_URL/ztGateway?platform=GCP" -H "$AUTH_HEADER")
+echo "Checking for existing ZTGW '${GATEWAY_NAME}'..." >&2
+EXISTING=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway?platform=GCP" -H "$AUTH_HEADER" 2>/dev/null)
 EXISTING_ID=$(echo "$EXISTING" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -82,11 +107,13 @@ for gw in gateways:
 
 if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "" ]; then
     GATEWAY_ID="$EXISTING_ID"
+    echo "Found existing ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID})" >&2
 else
     # -----------------------------------------------------------------------
     # Get location template ID
     # -----------------------------------------------------------------------
-    TEMPLATES=$(curl -sk "$BASE_URL/locationTemplate" -H "$AUTH_HEADER")
+    echo "Fetching location template..." >&2
+    TEMPLATES=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/locationTemplate" -H "$AUTH_HEADER" 2>/dev/null)
     TEMPLATE_ID=$(echo "$TEMPLATES" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -104,6 +131,7 @@ for t in templates:
     # -----------------------------------------------------------------------
     # Create ZTGW
     # -----------------------------------------------------------------------
+    echo "Creating ZTGW '${GATEWAY_NAME}' in ${GCP_REGION}..." >&2
     CREATE_PAYLOAD=$(python3 -c "
 import json
 region = '${GCP_REGION}'
@@ -124,10 +152,10 @@ if iam:
 print(json.dumps(payload))
 ")
 
-    CREATE_RESPONSE=$(curl -sk -X POST "$BASE_URL/ztGateway" \
+    CREATE_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 60 -X POST "$BASE_URL/ztGateway" \
         -H "$AUTH_HEADER" \
         -H "Content-Type: application/json" \
-        -d "$CREATE_PAYLOAD")
+        -d "$CREATE_PAYLOAD" 2>/dev/null)
 
     GATEWAY_ID=$(echo "$CREATE_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
 
@@ -135,32 +163,56 @@ print(json.dumps(payload))
         echo "$CREATE_RESPONSE" >&2
         exit 1
     fi
+    echo "ZTGW created (ID: ${GATEWAY_ID}). Waiting for HEALTHY status..." >&2
 fi
 
 # ---------------------------------------------------------------------------
-# Poll for health status (up to 10 minutes)
+# Poll for health status (up to 15 minutes, wall-clock time)
 # ---------------------------------------------------------------------------
-MAX_WAIT=600
+MAX_WAIT=900
 INTERVAL=15
-ELAPSED=0
+START_TIME=$(date +%s)
 
-while [ $ELAPSED -lt $MAX_WAIT ]; do
-    GW_RESPONSE=$(curl -sk "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER")
-    HEALTH=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthStatus','UNKNOWN'))" 2>/dev/null)
+while true; do
+    NOW=$(date +%s)
+    ELAPSED=$((NOW - START_TIME))
 
-    if [ "$HEALTH" = "HEALTHY" ]; then
+    if [ $ELAPSED -ge $MAX_WAIT ]; then
+        echo "Timeout: ZTGW $GATEWAY_ID did not reach HEALTHY within ${MAX_WAIT}s" >&2
         break
     fi
 
+    # Refresh token if needed
+    refresh_token_if_needed
+
+    # Poll health
+    GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+
+    # Parse health status (case-insensitive)
+    HEALTH_RAW=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthStatus','UNKNOWN'))" 2>/dev/null || echo "PARSE_ERROR")
+    HEALTH=$(echo "$HEALTH_RAW" | tr '[:lower:]' '[:upper:]')
+
+    echo "Poll: ZTGW $GATEWAY_ID health=$HEALTH_RAW elapsed=${ELAPSED}s" >&2
+
+    if [ "$HEALTH" = "HEALTHY" ]; then
+        echo "ZTGW $GATEWAY_ID is HEALTHY" >&2
+        break
+    fi
+
+    # If we got a parse error, the response might be an auth error
+    if [ "$HEALTH" = "PARSE_ERROR" ]; then
+        echo "Warning: could not parse health response, refreshing token..." >&2
+        authenticate
+    fi
+
     sleep $INTERVAL
-    ELAPSED=$((ELAPSED + INTERVAL))
 done
 
 # ---------------------------------------------------------------------------
 # Validate health and intercept deployment group
 # ---------------------------------------------------------------------------
 if [ "$HEALTH" != "HEALTHY" ]; then
-    echo "{\"error\": \"ZTGW $GATEWAY_ID did not reach HEALTHY status within ${MAX_WAIT}s (current: $HEALTH). Re-run terraform apply after the gateway is healthy.\"}" >&2
+    echo "{\"error\": \"ZTGW $GATEWAY_ID did not reach HEALTHY status within ${MAX_WAIT}s (current: $HEALTH_RAW). Re-run terraform apply after the gateway is healthy.\"}" >&2
     exit 1
 fi
 

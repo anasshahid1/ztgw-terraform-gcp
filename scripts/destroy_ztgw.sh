@@ -57,9 +57,9 @@ BASE_URL="https://connector.${CLOUD}.net/api/v1"
 # Authenticate
 # ---------------------------------------------------------------------------
 echo "${CYAN}Authenticating to Zscaler OneAPI...${RESET}"
-TOKEN_RESPONSE=$(curl -sk -X POST "$TOKEN_URL" \
+TOKEN_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 -X POST "$TOKEN_URL" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}")
+    -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" 2>/dev/null)
 
 ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
 
@@ -75,7 +75,7 @@ AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
 # Find ZTGW by name
 # ---------------------------------------------------------------------------
 echo "${CYAN}Looking up ZTGW '${GATEWAY_NAME}'...${RESET}"
-EXISTING=$(curl -sk "$BASE_URL/ztGateway?platform=GCP" -H "$AUTH_HEADER")
+EXISTING=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway?platform=GCP" -H "$AUTH_HEADER" 2>/dev/null)
 GATEWAY_ID=$(echo "$EXISTING" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -96,7 +96,7 @@ echo "${CYAN}Found ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID}). Deleting...${RESE
 # ---------------------------------------------------------------------------
 # Delete ZTGW
 # ---------------------------------------------------------------------------
-DELETE_RESPONSE=$(curl -sk -X DELETE "$BASE_URL/ztGateway/$GATEWAY_ID" \
+DELETE_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 -X DELETE "$BASE_URL/ztGateway/$GATEWAY_ID" \
     -H "$AUTH_HEADER" \
     -w "\n%{http_code}" 2>/dev/null)
 
