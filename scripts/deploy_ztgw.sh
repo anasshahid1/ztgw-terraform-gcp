@@ -140,12 +140,11 @@ print(json.dumps({
     fi
 
     # Set shorter timeouts for existing gateways based on current state
+    MAX_WAIT=600
     if [ "$HEALTH" = "INIT" ]; then
-        MAX_WAIT=300
-        echo "ZTGW exists but still in INIT state. Polling for up to 5 minutes..." >&2
+        echo "ZTGW exists but still in INIT state. Polling for up to 10 minutes..." >&2
     else
-        MAX_WAIT=180
-        echo "ZTGW exists but UNHEALTHY ($HEALTH_RAW). Polling for up to 3 minutes..." >&2
+        echo "ZTGW exists but UNHEALTHY ($HEALTH_RAW). Polling for up to 10 minutes..." >&2
     fi
     IS_NEW=false
 else
@@ -203,8 +202,8 @@ print(json.dumps(payload))
         echo "$CREATE_RESPONSE" >&2
         exit 1
     fi
-    echo "ZTGW created (ID: ${GATEWAY_ID}). Waiting for HEALTHY status (up to 15 minutes)..." >&2
-    MAX_WAIT=900
+    echo "ZTGW created (ID: ${GATEWAY_ID}). Waiting for HEALTHY status (up to 10 minutes)..." >&2
+    MAX_WAIT=600
     IS_NEW=true
 fi
 
