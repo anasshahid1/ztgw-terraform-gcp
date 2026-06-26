@@ -63,9 +63,9 @@ authenticate() {
     local token_resp
     token_resp=$(curl -sk --connect-timeout 10 --max-time 30 -X POST "$TOKEN_URL" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" 2>/dev/null)
+        -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}" 2>/dev/null || true)
 
-    ACCESS_TOKEN=$(echo "$token_resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+    ACCESS_TOKEN=$(echo "$token_resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || true)
 
     if [ -z "$ACCESS_TOKEN" ]; then
         echo '{"error": "Authentication failed"}' >&2
@@ -110,7 +110,7 @@ force_activation() {
     ACTIVATE_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 60 -X PUT "$ACTIVATE_URL" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
-        -d '{}' 2>/dev/null)
+        -d '{}' 2>/dev/null || true)
 
     echo "Force activation response: $ACTIVATE_RESPONSE" >&2
 }
@@ -124,7 +124,7 @@ authenticate
 # Check if ZTGW already exists by name
 # ---------------------------------------------------------------------------
 echo "Checking for existing ZTGW '${GATEWAY_NAME}'..." >&2
-EXISTING=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway?platform=GCP" -H "$AUTH_HEADER" 2>/dev/null)
+EXISTING=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway?platform=GCP" -H "$AUTH_HEADER" 2>/dev/null || true)
 EXISTING_ID=$(echo "$EXISTING" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -140,7 +140,7 @@ if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "" ]; then
     echo "Found existing ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID}). Checking health..." >&2
 
     # Single health check — skip polling if already healthy
-    GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+    GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null || true)
     HEALTH_RAW=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthStatus','UNKNOWN'))" 2>/dev/null || echo "PARSE_ERROR")
     HEALTH=$(echo "$HEALTH_RAW" | tr '[:lower:]' '[:upper:]')
 
@@ -153,9 +153,9 @@ if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "" ]; then
 
         refresh_token_if_needed
 
-        GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+        GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null || true)
 
-        IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
+        IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null || true)
         if [ -z "$IDG" ]; then
             echo "Warning: interceptDeploymentGroup not yet populated, continuing without it" >&2
         fi
@@ -192,7 +192,7 @@ else
     # Get location template ID
     # -----------------------------------------------------------------------
     echo "Fetching location template..." >&2
-    TEMPLATES=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/locationTemplate" -H "$AUTH_HEADER" 2>/dev/null)
+    TEMPLATES=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/locationTemplate" -H "$AUTH_HEADER" 2>/dev/null || true)
     TEMPLATE_ID=$(echo "$TEMPLATES" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -200,7 +200,7 @@ templates = data if isinstance(data, list) else data.get('list', data.get('templ
 for t in templates:
     print(t['id'])
     break
-" 2>/dev/null)
+" 2>/dev/null || true)
 
     if [ -z "$TEMPLATE_ID" ]; then
         echo '{"error": "Could not retrieve location template"}' >&2
@@ -234,9 +234,9 @@ print(json.dumps(payload))
     CREATE_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 60 -X POST "$BASE_URL/ztGateway" \
         -H "$AUTH_HEADER" \
         -H "Content-Type: application/json" \
-        -d "$CREATE_PAYLOAD" 2>/dev/null)
+        -d "$CREATE_PAYLOAD" 2>/dev/null || true)
 
-    GATEWAY_ID=$(echo "$CREATE_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+    GATEWAY_ID=$(echo "$CREATE_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
 
     if [ -z "$GATEWAY_ID" ]; then
         echo "$CREATE_RESPONSE" >&2
@@ -266,7 +266,7 @@ while true; do
     refresh_token_if_needed
 
     # Poll health
-    GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+    GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null || true)
 
     # Parse health status (case-insensitive)
     HEALTH_RAW=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthStatus','UNKNOWN'))" 2>/dev/null || echo "PARSE_ERROR")
@@ -302,9 +302,9 @@ sleep 15
 
 refresh_token_if_needed
 
-GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null || true)
 
-IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
+IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null || true)
 if [ -z "$IDG" ]; then
     echo "Warning: interceptDeploymentGroup not yet populated, continuing without it" >&2
 fi
