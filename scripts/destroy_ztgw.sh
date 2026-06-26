@@ -72,6 +72,30 @@ fi
 AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
 
 # ---------------------------------------------------------------------------
+# Force activation helper (reuses ACCESS_TOKEN from above)
+# ---------------------------------------------------------------------------
+force_activation() {
+    echo "${CYAN}Triggering force activation via OneAPI...${RESET}"
+    case "${CLOUD}" in
+        zscaler)      ACTIVATION_BASE="https://api.zsapi.net" ;;
+        zscalerbeta)  ACTIVATION_BASE="https://api.beta.zsapi.net" ;;
+        zscalerone)   ACTIVATION_BASE="https://api.one.zsapi.net" ;;
+        zscalertwo)   ACTIVATION_BASE="https://api.two.zsapi.net" ;;
+        zscalerthree) ACTIVATION_BASE="https://api.three.zsapi.net" ;;
+        *) echo "${YELLOW}Warning: unknown cloud '${CLOUD}', skipping activation${RESET}"; return ;;
+    esac
+
+    local ACTIVATE_URL="${ACTIVATION_BASE}/ztw/api/v1/ecAdminActivateStatus/forcedActivate"
+    local ACTIVATE_RESPONSE
+    ACTIVATE_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 60 -X PUT "$ACTIVATE_URL" \
+        -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' 2>/dev/null)
+
+    echo "Force activation response: $ACTIVATE_RESPONSE"
+}
+
+# ---------------------------------------------------------------------------
 # Find ZTGW by name
 # ---------------------------------------------------------------------------
 echo "${CYAN}Looking up ZTGW '${GATEWAY_NAME}'...${RESET}"
@@ -105,6 +129,11 @@ BODY=$(echo "$DELETE_RESPONSE" | sed '$d')
 
 if [ "$HTTP_CODE" = "204" ] || [ "$HTTP_CODE" = "200" ]; then
     echo "${GREEN}ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID}) deleted successfully.${RESET}"
+
+    # Wait 10s then force activation to propagate the change
+    echo "${CYAN}Waiting 10s before triggering force activation...${RESET}"
+    sleep 10
+    force_activation
 elif [ "$HTTP_CODE" = "404" ]; then
     echo "${YELLOW}ZTGW '${GATEWAY_NAME}' (ID: ${GATEWAY_ID}) not found (already deleted).${RESET}"
 else

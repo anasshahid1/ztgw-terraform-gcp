@@ -86,6 +86,30 @@ refresh_token_if_needed() {
 }
 
 # ---------------------------------------------------------------------------
+# Force activation via OneAPI (reusable)
+# ---------------------------------------------------------------------------
+force_activation() {
+    echo "Triggering force activation via OneAPI..." >&2
+    case "${CLOUD}" in
+        zscaler)      ACTIVATION_BASE="https://api.zsapi.net" ;;
+        zscalerbeta)  ACTIVATION_BASE="https://api.beta.zsapi.net" ;;
+        zscalerone)   ACTIVATION_BASE="https://api.one.zsapi.net" ;;
+        zscalertwo)   ACTIVATION_BASE="https://api.two.zsapi.net" ;;
+        zscalerthree) ACTIVATION_BASE="https://api.three.zsapi.net" ;;
+        *) echo "Warning: unknown cloud '${CLOUD}', skipping force activation" >&2; return ;;
+    esac
+
+    local ACTIVATE_URL="${ACTIVATION_BASE}/ztw/api/v1/ecAdminActivateStatus/forcedActivate"
+    local ACTIVATE_RESPONSE
+    ACTIVATE_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 60 -X PUT "$ACTIVATE_URL" \
+        -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{}' 2>/dev/null)
+
+    echo "Force activation response: $ACTIVATE_RESPONSE" >&2
+}
+
+# ---------------------------------------------------------------------------
 # Initial authentication
 # ---------------------------------------------------------------------------
 authenticate
@@ -129,6 +153,9 @@ if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "" ]; then
         if [ -z "$IDG" ]; then
             echo "Warning: interceptDeploymentGroup not yet populated, continuing without it" >&2
         fi
+
+        # Trigger force activation
+        force_activation
 
         # Extract outputs and return immediately
         echo "$GW_RESPONSE" | python3 -c "
@@ -275,6 +302,11 @@ IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.std
 if [ -z "$IDG" ]; then
     echo "Warning: interceptDeploymentGroup not yet populated, continuing without it" >&2
 fi
+
+# ---------------------------------------------------------------------------
+# Trigger force activation
+# ---------------------------------------------------------------------------
+force_activation
 
 # ---------------------------------------------------------------------------
 # Extract outputs
