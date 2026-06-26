@@ -184,6 +184,13 @@ if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
         done
         echo "${RED}Invalid selection${RESET}"
     done
+
+    # Optional login domain override
+    read -r -p "${CYAN}Override login domain? (e.g. zslogin.net) [Enter to auto-derive from cloud]: ${RESET}" login_domain_input
+    if [ -n "$login_domain_input" ]; then
+        echo "export TF_VAR_login_domain='$login_domain_input'" >> .zsecrc
+        echo "${GREEN}Using custom login domain: $login_domain_input${RESET}"
+    fi
     echo ""
 
     # -----------------------------------------------------------------------
@@ -397,6 +404,9 @@ ${CYAN}(e.g. projects/zscaler-project/locations/global/interceptDeploymentGroups
 
     echo "  Cloud:                ${GREEN}$cloud${RESET}"
     echo "  Vanity Domain:        ${GREEN}$vanity_domain${RESET}"
+    if [ -n "$login_domain_input" ]; then
+        echo "  Login Domain:         ${GREEN}$login_domain_input${RESET} (override)"
+    fi
 
     if [[ "$deploy_consumer" == "true" ]]; then
         echo "  Profile Scope:        ${GREEN}$security_profile_scope${RESET}"

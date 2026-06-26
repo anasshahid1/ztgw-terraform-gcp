@@ -25,6 +25,7 @@ CLIENT_ID=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.std
 CLIENT_SECRET=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['client_secret'])")
 VANITY_DOMAIN=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['vanity_domain'])")
 CLOUD=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['cloud'])")
+INPUT_LOGIN_DOMAIN=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('login_domain',''))")
 GATEWAY_NAME=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['gateway_name'])")
 GCP_REGION=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['gcp_region'])")
 LOCATION_NAME=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['location_name'])")
@@ -45,6 +46,11 @@ elif [ "$CLOUD" = "zscalertwo" ]; then
     LOGIN_DOMAIN="zslogintwo.net"
 else
     LOGIN_DOMAIN="zslogin.net"
+fi
+
+if [ -n "$INPUT_LOGIN_DOMAIN" ]; then
+    LOGIN_DOMAIN="$INPUT_LOGIN_DOMAIN"
+    echo "Using custom login domain: ${LOGIN_DOMAIN}" >&2
 fi
 
 TOKEN_URL="https://${VANITY_DOMAIN}.${LOGIN_DOMAIN}/oauth2/v1/token"

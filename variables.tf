@@ -40,6 +40,16 @@ variable "cloud" {
   default     = "zscaler"
 }
 
+variable "login_domain" {
+  description = <<-EOT
+    Override OAuth2 login domain. Auto-derived from cloud if empty.
+    Use 'zslogin.net' for tenants that authenticate through production login
+    but use a different backend cloud.
+    EOT
+  type        = string
+  default     = ""
+}
+
 # ---------------------------------------------------------------------------
 # GCP ZTGW deployment parameters (used when deploy_ztgw = true)
 # ---------------------------------------------------------------------------

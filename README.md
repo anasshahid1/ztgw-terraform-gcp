@@ -173,6 +173,7 @@ security_profile_group_id         = ".../securityProfileGroups/..."
 | `client_secret` | `string` | Yes | OneAPI OAuth2 client secret (sensitive) |
 | `vanity_domain` | `string` | Yes | Zscaler vanity domain (e.g. `acme`) |
 | `cloud` | `string` | No | Cloud name (`zscaler`, `zscalerone`, etc.) |
+| `login_domain` | `string` | No | Override OAuth2 login domain. Auto-derived if empty. Use `zslogin.net` for tenants authenticating through production login with a different backend cloud. |
 
 ### GCP ZTGW
 
