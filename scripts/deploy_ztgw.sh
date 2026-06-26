@@ -117,10 +117,17 @@ if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "" ]; then
     if [ "$HEALTH" = "HEALTHY" ]; then
         echo "ZTGW already HEALTHY — returning immediately" >&2
 
+        # Wait briefly for interceptDeploymentGroup to propagate
+        echo "Waiting 15s for interceptDeploymentGroup to populate..." >&2
+        sleep 15
+
+        refresh_token_if_needed
+
+        GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+
         IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
         if [ -z "$IDG" ]; then
-            echo "{\"error\": \"ZTGW $GATEWAY_ID is HEALTHY but interceptDeploymentGroup is not yet populated. Re-run terraform apply in a few minutes.\"}" >&2
-            exit 1
+            echo "Warning: interceptDeploymentGroup not yet populated, continuing without it" >&2
         fi
 
         # Extract outputs and return immediately
@@ -256,11 +263,17 @@ if [ "$HEALTH" != "HEALTHY" ]; then
     exit 1
 fi
 
-IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
+# Wait briefly for interceptDeploymentGroup to propagate
+echo "Waiting 15s for interceptDeploymentGroup to populate..." >&2
+sleep 15
 
+refresh_token_if_needed
+
+GW_RESPONSE=$(curl -sk --connect-timeout 10 --max-time 30 "$BASE_URL/ztGateway/$GATEWAY_ID" -H "$AUTH_HEADER" 2>/dev/null)
+
+IDG=$(echo "$GW_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('interceptDeploymentGroup',''))" 2>/dev/null)
 if [ -z "$IDG" ]; then
-    echo "{\"error\": \"ZTGW $GATEWAY_ID is HEALTHY but interceptDeploymentGroup is not yet populated. Re-run terraform apply in a few minutes.\"}" >&2
-    exit 1
+    echo "Warning: interceptDeploymentGroup not yet populated, continuing without it" >&2
 fi
 
 # ---------------------------------------------------------------------------
