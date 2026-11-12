@@ -19,19 +19,22 @@ variable "deploy_consumer" {
 # ---------------------------------------------------------------------------
 
 variable "client_id" {
-  description = "Zscaler OneAPI OAuth2 client ID."
+  description = "Zscaler OneAPI OAuth2 client ID. Required when deploy_ztgw = true."
   type        = string
+  default     = ""
 }
 
 variable "client_secret" {
-  description = "Zscaler OneAPI OAuth2 client secret."
+  description = "Zscaler OneAPI OAuth2 client secret. Required when deploy_ztgw = true."
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "vanity_domain" {
-  description = "Zscaler vanity domain (e.g. 'acme' -> acme.zslogin.net)."
+  description = "Zscaler vanity domain (e.g. 'acme' -> acme.zslogin.net). Required when deploy_ztgw = true."
   type        = string
+  default     = ""
 }
 
 variable "cloud" {
