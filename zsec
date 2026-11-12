@@ -150,48 +150,50 @@ if [[ "$oper" == "up" && ! -e ./.zsecrc ]]; then
     echo ""
 
     # -----------------------------------------------------------------------
-    # Step 2: Zscaler OneAPI credentials (all modes)
+    # Step 2: Zscaler OneAPI credentials (ZTGW-deploying modes only)
     # -----------------------------------------------------------------------
-    echo "${YELLOW}--- Zscaler OneAPI Authentication ---${RESET}"
-    echo ""
-
-    while [ -z "$client_id" ]; do
-        read -r -p "${CYAN}Enter Zscaler OneAPI Client ID: ${RESET}" client_id
-    done
-    echo "export TF_VAR_client_id='$client_id'" >> .zsecrc
-
-    while [ -z "$client_secret" ]; do
-        read -rs -p "${CYAN}Enter Zscaler OneAPI Client Secret (input hidden): ${RESET}" client_secret
+    if [[ "$deploy_ztgw" == "true" ]]; then
+        echo "${YELLOW}--- Zscaler OneAPI Authentication ---${RESET}"
         echo ""
-    done
-    echo "export TF_VAR_client_secret='$client_secret'" >> .zsecrc
 
-    while [ -z "$vanity_domain" ]; do
-        read -r -p "${CYAN}Enter Zscaler Vanity Domain (e.g. acme): ${RESET}" vanity_domain
-    done
-    echo "export TF_VAR_vanity_domain='$vanity_domain'" >> .zsecrc
-
-    PS3="${CYAN}Select Zscaler cloud: ${RESET}"
-    clouds=("zscaler" "zscalerone" "zscalertwo" "zscalerthree" "zscalerbeta")
-    select cloud_choice in "${clouds[@]}"; do
-        for c in "${clouds[@]}"; do
-            if [[ "$c" == "$cloud_choice" ]]; then
-                cloud=$cloud_choice
-                echo "${GREEN}Cloud: $cloud${RESET}"
-                echo "export TF_VAR_cloud='$cloud'" >> .zsecrc
-                break 2
-            fi
+        while [ -z "$client_id" ]; do
+            read -r -p "${CYAN}Enter Zscaler OneAPI Client ID: ${RESET}" client_id
         done
-        echo "${RED}Invalid selection${RESET}"
-    done
+        echo "export TF_VAR_client_id='$client_id'" >> .zsecrc
 
-    # Optional login domain override
-    read -r -p "${CYAN}Enter custom login domain if your tenant uses a different one than '${cloud}' default (e.g. zslogin.net) [Enter to use cloud default]: ${RESET}" login_domain_input
-    if [ -n "$login_domain_input" ]; then
-        echo "export TF_VAR_login_domain='$login_domain_input'" >> .zsecrc
-        echo "${GREEN}Using custom login domain: $login_domain_input (instead of cloud default)${RESET}"
+        while [ -z "$client_secret" ]; do
+            read -rs -p "${CYAN}Enter Zscaler OneAPI Client Secret (input hidden): ${RESET}" client_secret
+            echo ""
+        done
+        echo "export TF_VAR_client_secret='$client_secret'" >> .zsecrc
+
+        while [ -z "$vanity_domain" ]; do
+            read -r -p "${CYAN}Enter Zscaler Vanity Domain (e.g. acme): ${RESET}" vanity_domain
+        done
+        echo "export TF_VAR_vanity_domain='$vanity_domain'" >> .zsecrc
+
+        PS3="${CYAN}Select Zscaler cloud: ${RESET}"
+        clouds=("zscaler" "zscalerone" "zscalertwo" "zscalerthree" "zscalerbeta")
+        select cloud_choice in "${clouds[@]}"; do
+            for c in "${clouds[@]}"; do
+                if [[ "$c" == "$cloud_choice" ]]; then
+                    cloud=$cloud_choice
+                    echo "${GREEN}Cloud: $cloud${RESET}"
+                    echo "export TF_VAR_cloud='$cloud'" >> .zsecrc
+                    break 2
+                fi
+            done
+            echo "${RED}Invalid selection${RESET}"
+        done
+
+        # Optional login domain override
+        read -r -p "${CYAN}Enter custom login domain if your tenant uses a different one than '${cloud}' default (e.g. zslogin.net) [Enter to use cloud default]: ${RESET}" login_domain_input
+        if [ -n "$login_domain_input" ]; then
+            echo "export TF_VAR_login_domain='$login_domain_input'" >> .zsecrc
+            echo "${GREEN}Using custom login domain: $login_domain_input (instead of cloud default)${RESET}"
+        fi
+        echo ""
     fi
-    echo ""
 
     # -----------------------------------------------------------------------
     # Step 3: ZTGW parameters (full + ZTGW-only modes)
@@ -402,10 +404,12 @@ ${CYAN}(e.g. projects/zscaler-project/locations/global/interceptDeploymentGroups
         echo "  Intercept Dep. Group: ${GREEN}$intercept_deployment_group${RESET}"
     fi
 
-    echo "  Cloud:                ${GREEN}$cloud${RESET}"
-    echo "  Vanity Domain:        ${GREEN}$vanity_domain${RESET}"
-    if [ -n "$login_domain_input" ]; then
-        echo "  Login Domain:         ${GREEN}$login_domain_input${RESET} (override)"
+    if [[ "$deploy_ztgw" == "true" ]]; then
+        echo "  Cloud:                ${GREEN}$cloud${RESET}"
+        echo "  Vanity Domain:        ${GREEN}$vanity_domain${RESET}"
+        if [ -n "$login_domain_input" ]; then
+            echo "  Login Domain:         ${GREEN}$login_domain_input${RESET} (override)"
+        fi
     fi
 
     if [[ "$deploy_consumer" == "true" ]]; then
@@ -481,9 +485,11 @@ fi
 # Validate required variables
 # ---------------------------------------------------------------------------
 
-if [ -z "$TF_VAR_client_id" ] || [ -z "$TF_VAR_client_secret" ] || [ -z "$TF_VAR_vanity_domain" ]; then
-    echo "${RED}Zscaler OneAPI credentials are missing. Delete .zsecrc and re-run './zsec up'${RESET}"
-    exit 1
+if [[ "$TF_VAR_deploy_ztgw" != "false" ]]; then
+    if [ -z "$TF_VAR_client_id" ] || [ -z "$TF_VAR_client_secret" ] || [ -z "$TF_VAR_vanity_domain" ]; then
+        echo "${RED}Zscaler OneAPI credentials are missing. Delete .zsecrc and re-run './zsec up'${RESET}"
+        exit 1
+    fi
 fi
 
 if [[ "$TF_VAR_deploy_consumer" != "false" ]]; then
